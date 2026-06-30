@@ -89,3 +89,7 @@ print("\nFinal dataset shape:", final.shape)
 print(final.head(10))
 
 # ── 7.
+out_path = "/Users/priaa/Desktop/wheat-fhb-forecasting/processed/fhb_final_dataset.csv"
+final.to_csv(out_path, index=False)
+print(f"\nSaved to: {out_path}")
+print("Done.")
