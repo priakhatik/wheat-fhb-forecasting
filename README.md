@@ -179,6 +179,6 @@ result = predict_fhb_risk(
 
 ## 👩‍💻 Author
 
-**Priya Khatik** — Senior Data Analyst  
+**Priya Khatik**
 MS in AI & Business Analytics, University of South Florida  
 [GitHub](https://github.com/priakhatik)
