@@ -43,6 +43,8 @@ consistent with known Fusarium graminearum infection biology.
 ---
 
 ## 🗂️ Project Structure
+
+```
 wheat-fhb-forecasting/
 ├── raw/
 │   ├── weather/          # Daily gridMET CSVs per county
@@ -56,17 +58,16 @@ wheat-fhb-forecasting/
 │   ├── models/           # 4-class model outputs
 │   └── models_binary/    # Binary model outputs
 └── scripts/
-├── counties.py        # Study area definition
-├── fetch_weather.py   # gridMET data collection
-├── fetch_nass.py      # USDA NASS data collection
-├── build_labels.py    # Disease label construction
-├── merge.py           # Feature engineering + dataset merge
-├── eda.py             # Exploratory data analysis
-├── model.py           # 4-class classification
-├── model_binary.py    # Binary classification
-└── predict.py         # Live prediction tool
-
----
+    ├── counties.py        # Study area definition
+    ├── fetch_weather.py   # gridMET data collection
+    ├── fetch_nass.py      # USDA NASS data collection
+    ├── build_labels.py    # Disease label construction
+    ├── merge.py           # Feature engineering + dataset merge
+    ├── eda.py             # Exploratory data analysis
+    ├── model.py           # 4-class classification
+    ├── model_binary.py    # Binary classification
+    └── predict.py         # Live prediction tool
+```
 
 ## 🔬 Data Sources
 
