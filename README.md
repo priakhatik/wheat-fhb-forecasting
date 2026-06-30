@@ -1,3 +1,71 @@
+# 🌾 Wheat FHB Disease Forecasting Platform
+
+A biology-informed, climate-aware machine learning system for predicting 
+Fusarium Head Blight (FHB) outbreaks in spring wheat across North Dakota, 
+Minnesota, and South Dakota (2006–2025).
+
+---
+
+## 🎯 Problem
+
+Fusarium Head Blight (FHB) is one of the most destructive wheat diseases 
+in the US, causing billions in losses. The fungus infects wheat during a 
+narrow 7-10 day flowering window — but only when weather conditions are 
+right: warm nights, high humidity, and frequent rain.
+
+Existing tools struggle to provide reliable in-season predictions as 
+climate volatility disrupts historical growing patterns.
+
+---
+
+## 💡 Solution
+
+An end-to-end pipeline that:
+1. Collects real weather data (gridMET) for 20 top wheat-producing counties
+2. Identifies the biological infection window using USDA crop progress data
+3. Engineers weather features for the 15-day pre-heading period
+4. Predicts outbreak risk using a Random Forest classifier
+5. Outputs probability, risk level, and key biological drivers
+
+---
+
+## 📊 Results
+
+| Model | Accuracy | ROC-AUC |
+|-------|----------|---------|
+| Logistic Regression | 80.00% | 0.856 |
+| **Random Forest** | **88.33%** | **0.922** |
+
+**Key finding:** Average humidity and maximum temperature during the 
+15-day pre-heading window are the strongest predictors of FHB outbreaks — 
+consistent with known Fusarium graminearum infection biology.
+
+---
+
+## 🗂️ Project Structure
+wheat-fhb-forecasting/
+├── raw/
+│   ├── weather/          # Daily gridMET CSVs per county
+│   ├── nass/             # USDA crop progress, condition, yield
+│   └── labels/           # FHB severity labels
+├── processed/
+│   ├── weather_combined.parquet
+│   ├── fhb_final_dataset.csv
+│   ├── fhb_final_imputed.csv
+│   ├── eda/              # EDA plots
+│   ├── models/           # 4-class model outputs
+│   └── models_binary/    # Binary model outputs
+└── scripts/
+├── counties.py        # Study area definition
+├── fetch_weather.py   # gridMET data collection
+├── fetch_nass.py      # USDA NASS data collection
+├── build_labels.py    # Disease label construction
+├── merge.py           # Feature engineering + dataset merge
+├── eda.py             # Exploratory data analysis
+├── model.py           # 4-class classification
+├── model_binary.py    # Binary classification
+└── predict.py         # Live prediction tool
+
 ---
 
 ## 🔬 Data Sources
@@ -111,6 +179,6 @@ result = predict_fhb_risk(
 
 ## 👩‍💻 Author
 
-**Priya Khatik**
+**Priya Khatik** — Senior Data Analyst  
 MS in AI & Business Analytics, University of South Florida  
 [GitHub](https://github.com/priakhatik)
