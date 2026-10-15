@@ -9,9 +9,12 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+from pathlib import Path
+from sklearn.pipeline import make_pipeline
 
 # ── 1. Load imputed dataset ───────────────────────────────────────
-df = pd.read_csv("/Users/priaa/Desktop/wheat-fhb-forecasting/processed/fhb_final_imputed.csv")
+ROOT = Path(__file__).resolve().parents[1]
+df = pd.read_csv(ROOT / "processed" / "fhb_final_imputed.csv")
 print(f"Total rows: {len(df)}")
 
 # ── 2. Convert to binary labels ───────────────────────────────────
@@ -33,30 +36,25 @@ print(f"\nX shape: {X.shape}")
 print(f"y shape: {y.shape}")
 print(f"Class balance: {y.mean():.1%} outbreak rate")
 
-# ── 4. Scale features ─────────────────────────────────────────────
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-# ── 5. Define models ──────────────────────────────────────────────
+# ── 4. Define models ──────────────────────────────────────────────
+# Fit preprocessing inside each training fold to avoid leakage from the test row.
 models = {
-    "Logistic Regression": (
-        LogisticRegression(max_iter=1000, random_state=42),
-        X_scaled
+    "Logistic Regression": make_pipeline(
+        StandardScaler(), LogisticRegression(max_iter=1000, random_state=42)
     ),
-    "Random Forest": (
-        RandomForestClassifier(n_estimators=100, max_depth=3, random_state=42),
-        X
+    "Random Forest": RandomForestClassifier(
+        n_estimators=100, max_depth=3, random_state=42
     ),
 }
 
 # ── 6. LOOCV evaluation ───────────────────────────────────────────
-OUT_DIR = "/Users/priaa/Desktop/wheat-fhb-forecasting/processed/models_binary"
+OUT_DIR = ROOT / "processed" / "models_binary"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 loo = LeaveOneOut()
 results = {}
 
-for name, (model, X_input) in models.items():
+for name, model in models.items():
     print(f"\n{'='*50}")
     print(f"Model: {name}")
     print(f"{'='*50}")
@@ -64,8 +62,8 @@ for name, (model, X_input) in models.items():
     y_pred = np.zeros(len(y), dtype=int)
     y_prob = np.zeros(len(y))
 
-    for train_idx, test_idx in loo.split(X_input):
-        X_train, X_test = X_input[train_idx], X_input[test_idx]
+    for train_idx, test_idx in loo.split(X):
+        X_train, X_test = X[train_idx], X[test_idx]
         y_train = y[train_idx]
         model.fit(X_train, y_train)
         y_pred[test_idx] = model.predict(X_test)
