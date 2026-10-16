@@ -5,12 +5,16 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import LeaveOneOut
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from pathlib import Path
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
 # ── 1. Load data ──────────────────────────────────────────────────
-df = pd.read_csv("/Users/priaa/Desktop/wheat-fhb-forecasting/processed/fhb_final_dataset.csv")
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "processed"
+df = pd.read_csv(DATA_DIR / "fhb_final_dataset.csv")
 print(f"Total rows: {len(df)}")
 print(f"Known labels: {df['severity'].notna().sum()}")
 print(f"Missing labels: {df['severity'].isna().sum()}")
@@ -46,37 +50,32 @@ print(f"\nX shape: {X.shape}")
 print(f"y shape: {y.shape}")
 print(f"Classes: {np.unique(y)}")
 
-# ── 4. Scale features ─────────────────────────────────────────────
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-# ── 5. Define models ──────────────────────────────────────────────
+# ── 4. Define models ──────────────────────────────────────────────
+# The scaler must be fitted inside each CV training fold, not on all rows.
 models = {
-    "Logistic Regression": (
-        LogisticRegression(max_iter=1000, random_state=42),
-        X_scaled
+    "Logistic Regression": make_pipeline(
+        StandardScaler(), LogisticRegression(max_iter=1000, random_state=42)
     ),
-    "Random Forest": (
-        RandomForestClassifier(n_estimators=100, max_depth=3, random_state=42),
-        X
+    "Random Forest": RandomForestClassifier(
+        n_estimators=100, max_depth=3, random_state=42
     ),
 }
 
 # ── 6. LOOCV evaluation ───────────────────────────────────────────
-OUT_DIR = "/Users/priaa/Desktop/wheat-fhb-forecasting/processed/models"
+OUT_DIR = DATA_DIR / "models"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 loo = LeaveOneOut()
 results = {}
 
-for name, (model, X_input) in models.items():
+for name, model in models.items():
     print(f"\n{'='*50}")
     print(f"Model: {name}")
     print(f"{'='*50}")
 
     y_pred = np.zeros(len(y), dtype=int)
-    for train_idx, test_idx in loo.split(X_input):
-        X_train, X_test = X_input[train_idx], X_input[test_idx]
+    for train_idx, test_idx in loo.split(X):
+        X_train, X_test = X[train_idx], X[test_idx]
         y_train = y[train_idx]
         model.fit(X_train, y_train)
         y_pred[test_idx] = model.predict(X_test)
@@ -135,7 +134,7 @@ plt.close()
 print("Feature importance plot saved")
 
 # ── 9. Save imputed dataset ───────────────────────────────────────
-imputed_path = "/Users/priaa/Desktop/wheat-fhb-forecasting/processed/fhb_final_imputed.csv"
+imputed_path = DATA_DIR / "fhb_final_imputed.csv"
 df.to_csv(imputed_path, index=False)
 print(f"\nImputed dataset saved to: {imputed_path}")
 print(f"\nAll outputs saved to: {OUT_DIR}")
