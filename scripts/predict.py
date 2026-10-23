@@ -1,57 +1,73 @@
-import pandas as pd
+"""Reproducible FHB risk prediction from the project's imputed training data.
+
+The trained model is loaded lazily: importing this module neither reads a
+developer-specific file path nor starts an interactive prompt.
+"""
+from functools import lru_cache
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-import warnings
-warnings.filterwarnings("ignore")
 
-# ── 1. Train the final model on all data ─────────────────────────
-df = pd.read_csv("/Users/priaa/Desktop/wheat-fhb-forecasting/processed/fhb_final_imputed.csv")
-df["outbreak"] = (df["severity"] >= 2).astype(int)
+ROOT = Path(__file__).resolve().parents[1]
+DATA_PATH = ROOT / "processed" / "fhb_final_imputed.csv"
+FEATURES = [
+    "rainy_days", "avg_humidity", "high_humidity_days",
+    "avg_tmax_c", "avg_tmin_c",
+]
 
-FEATURES = ["rainy_days", "avg_humidity", "high_humidity_days",
-            "avg_tmax_c", "avg_tmin_c"]
 
-X = df[FEATURES].values
-y = df["outbreak"].values
+@lru_cache(maxsize=4)
+def load_model(dataset_path=DATA_PATH):
+    """Train once per dataset path; fail clearly on invalid training inputs."""
+    df = pd.read_csv(dataset_path)
+    required = FEATURES + ["severity"]
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(f"missing required training columns: {', '.join(missing)}")
+    if df[required].isna().any().any():
+        raise ValueError("training data contains missing features or severity labels")
 
-model = RandomForestClassifier(n_estimators=100, max_depth=3, random_state=42)
-model.fit(X, y)
-print("Model trained on", len(df), "observations")
+    features = df[FEATURES].to_numpy(dtype=float)
+    if not np.isfinite(features).all():
+        raise ValueError("training data contains non-finite weather features")
+    labels = (df["severity"].to_numpy(dtype=float) >= 2).astype(int)
+    if set(labels) != {0, 1}:
+        raise ValueError("training data must contain both outbreak classes")
 
-# ── 2. Prediction function ────────────────────────────────────────
+    model = RandomForestClassifier(
+        n_estimators=100, max_depth=3, random_state=42
+    )
+    model.fit(features, labels)
+    return model
+
+
 def predict_fhb_risk(rainy_days, avg_humidity, high_humidity_days,
                      avg_tmax_c, avg_tmin_c):
+    """Predict outbreak risk from pre-heading weather features.
+
+    These probabilities come from a small dataset with weather-imputed labels;
+    they are exploratory, not independently validated field-level forecasts.
     """
-    Predict FHB outbreak risk given weather conditions
-    during the 15-day pre-heading window.
-
-    Parameters:
-        rainy_days        -- number of days with rain > 1mm
-        avg_humidity      -- average relative humidity (%)
-        high_humidity_days -- days with max humidity > 80%
-        avg_tmax_c        -- average max temperature (Celsius)
-        avg_tmin_c        -- average min temperature (Celsius)
-
-    Returns:
-        Dictionary with probability, risk level, and drivers
-    """
-    features = np.array([[rainy_days, avg_humidity, high_humidity_days,
-                          avg_tmax_c, avg_tmin_c]])
-
-    prob = model.predict_proba(features)[0][1]
+    features = np.array([[
+        rainy_days, avg_humidity, high_humidity_days,
+        avg_tmax_c, avg_tmin_c,
+    ]], dtype=float)
+    if not np.isfinite(features).all():
+        raise ValueError("weather inputs must be finite numbers")
+    prob = float(load_model().predict_proba(features)[0, 1])
 
     if prob >= 0.70:
         risk_level = "HIGH"
-        recommendation = "Apply fungicide at heading. High FHB risk."
+        recommendation = "High modeled risk; consult local extension guidance."
     elif prob >= 0.40:
         risk_level = "MODERATE"
-        recommendation = "Monitor closely. Consider fungicide if rain continues."
+        recommendation = "Moderate modeled risk; monitor local conditions."
     else:
         risk_level = "LOW"
-        recommendation = "Low risk. Standard monitoring sufficient."
+        recommendation = "Low modeled risk; continue routine monitoring."
 
-    # Identify key drivers
     drivers = []
     if avg_humidity > 68:
         drivers.append(f"High humidity ({avg_humidity:.1f}%)")
@@ -66,71 +82,53 @@ def predict_fhb_risk(rainy_days, avg_humidity, high_humidity_days,
         "outbreak_probability": f"{prob:.1%}",
         "risk_level": risk_level,
         "recommendation": recommendation,
-        "key_drivers": drivers
+        "key_drivers": drivers,
     }
 
-# ── 3. Print results nicely ───────────────────────────────────────
+
 def print_forecast(result, location=""):
-    print(f"\n{'='*50}")
+    print("\n" + "=" * 50)
     if location:
         print(f"Location: {location}")
-    print(f"{'='*50}")
+    print("=" * 50)
     print(f"Outbreak Probability : {result['outbreak_probability']}")
     print(f"Risk Level           : {result['risk_level']}")
     print(f"Recommendation       : {result['recommendation']}")
-    print(f"Key Drivers          :")
-    for d in result['key_drivers']:
-        print(f"  → {d}")
-    print(f"{'='*50}")
+    print("Key Drivers          :")
+    for driver in result["key_drivers"]:
+        print(f"  → {driver}")
+    print("=" * 50)
 
-# ── 4. Example predictions ────────────────────────────────────────
-print("\nRunning example predictions...\n")
 
-# Example 1 — High risk conditions (warm humid rainy)
-result1 = predict_fhb_risk(
-    rainy_days=12,
-    avg_humidity=72,
-    high_humidity_days=10,
-    avg_tmax_c=22,
-    avg_tmin_c=14
-)
-print_forecast(result1, "ND Cass County — High Risk Scenario")
+def main():
+    print("Running example predictions...\n")
+    scenarios = [
+        ("ND Cass County — High Risk Scenario", (12, 72, 10, 22, 14)),
+        ("SD Brown County — Low Risk Scenario", (3, 48, 2, 31, 18)),
+        ("MN Polk County — Moderate Risk Scenario", (7, 63, 6, 26, 13)),
+    ]
+    for location, inputs in scenarios:
+        print_forecast(predict_fhb_risk(*inputs), location)
 
-# Example 2 — Low risk conditions (dry hot)
-result2 = predict_fhb_risk(
-    rainy_days=3,
-    avg_humidity=48,
-    high_humidity_days=2,
-    avg_tmax_c=31,
-    avg_tmin_c=18
-)
-print_forecast(result2, "SD Brown County — Low Risk Scenario")
+    print("\nINTERACTIVE MODE — Enter your own weather data")
+    try:
+        rainy_days = int(input("Rainy days in last 15 days: "))
+        avg_humidity = float(input("Average humidity (%): "))
+        high_humidity_days = int(input("Days with humidity > 80%: "))
+        avg_tmax_c = float(input("Average max temperature (°C): "))
+        avg_tmin_c = float(input("Average min temperature (°C): "))
+    except (KeyboardInterrupt, EOFError):
+        print("\nExited interactive mode.")
+        return
 
-# Example 3 — Moderate risk
-result3 = predict_fhb_risk(
-    rainy_days=7,
-    avg_humidity=63,
-    high_humidity_days=6,
-    avg_tmax_c=26,
-    avg_tmin_c=13
-)
-print_forecast(result3, "MN Polk County — Moderate Risk Scenario")
+    print_forecast(
+        predict_fhb_risk(
+            rainy_days, avg_humidity, high_humidity_days,
+            avg_tmax_c, avg_tmin_c,
+        ),
+        "Your Location",
+    )
 
-# ── 5. Interactive mode ───────────────────────────────────────────
-print("\n" + "="*50)
-print("INTERACTIVE MODE — Enter your own weather data")
-print("="*50)
 
-try:
-    rainy_days = int(input("Rainy days in last 15 days: "))
-    avg_humidity = float(input("Average humidity (%): "))
-    high_humidity_days = int(input("Days with humidity > 80%: "))
-    avg_tmax_c = float(input("Average max temperature (°C): "))
-    avg_tmin_c = float(input("Average min temperature (°C): "))
-
-    result = predict_fhb_risk(rainy_days, avg_humidity, high_humidity_days,
-                               avg_tmax_c, avg_tmin_c)
-    print_forecast(result, "Your Location")
-
-except KeyboardInterrupt:
-    print("\nExited interactive mode.")
+if __name__ == "__main__":
+    main()
