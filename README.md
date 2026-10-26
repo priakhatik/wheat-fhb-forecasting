@@ -135,15 +135,18 @@ result = predict_fhb_risk(
     avg_tmin_c=13
 )
 
-# Output:
-# Outbreak Probability : 77.4%
-# Risk Level           : HIGH
-# Recommendation       : Apply fungicide at heading. High FHB risk.
-# Key Drivers          :
-#   → High humidity (74.0%)
-#   → Cool temperatures (21.0°C max)
-#   → Frequent rain (12 days)
+print(result["outbreak_probability"], result["risk_level"])
+print(result["recommendation"])
+print(result["key_drivers"])
 ```
+
+The prediction helper validates nonnegative whole-day weather counts and a
+0–100% humidity percentage before loading the model. Training rejects missing,
+non-finite, fractional, or out-of-range severity classes (expected 0–3) rather
+than silently converting invalid labels into outbreak classes. These checks
+protect data integrity; they do not establish field-level forecast accuracy.
+Use local extension guidance for agronomic decisions, not this exploratory
+model alone.
 
 ---
 
