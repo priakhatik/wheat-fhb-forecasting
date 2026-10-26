@@ -66,3 +66,53 @@ def test_nonfinite_prediction_inputs_are_rejected():
 
     with pytest.raises(ValueError, match="finite"):
         predict_fhb_risk(4, np.nan, 3, 24, 15)
+
+
+@pytest.mark.parametrize("bad_severity", [float("inf"), -float("inf"), -1, 4, 1.5])
+def test_invalid_severity_labels_cannot_be_silently_binarized(tmp_path, bad_severity):
+    from scripts.predict import load_model
+
+    data_path = tmp_path / "bad_severity.csv"
+    pd.DataFrame({
+        "rainy_days": [2, 3, 10, 12],
+        "avg_humidity": [40, 45, 75, 80],
+        "high_humidity_days": [1, 2, 9, 11],
+        "avg_tmax_c": [30, 29, 22, 21],
+        "avg_tmin_c": [18, 17, 13, 12],
+        "severity": [0, 1, 2, bad_severity],
+    }).to_csv(data_path, index=False)
+    with pytest.raises(ValueError, match="finite classes 0 through 3"):
+        load_model(data_path)
+
+
+@pytest.mark.parametrize("weather", [
+    (-1, 70, 5, 22, 13),
+    (3.5, 70, 5, 22, 13),
+    (3, 70, -1, 22, 13),
+    (3, 70, 1.5, 22, 13),
+    (3, 101, 5, 22, 13),
+    (3, -0.1, 5, 22, 13),
+    (True, 70, 5, 22, 13),
+])
+def test_invalid_forecast_weather_is_rejected_before_model_load(weather, monkeypatch):
+    from scripts import predict
+
+    monkeypatch.setattr(predict, "load_model", lambda: pytest.fail("trained on invalid input"))
+    with pytest.raises(ValueError, match="whole-day counts|avg_humidity"):
+        predict.predict_fhb_risk(*weather)
+
+
+def test_training_severity_text_is_rejected_with_clear_error(tmp_path):
+    from scripts.predict import load_model
+
+    data_path = tmp_path / "bad_severity_text.csv"
+    pd.DataFrame({
+        "rainy_days": [2, 3, 10, 12],
+        "avg_humidity": [40, 45, 75, 80],
+        "high_humidity_days": [1, 2, 9, 11],
+        "avg_tmax_c": [30, 29, 22, 21],
+        "avg_tmin_c": [18, 17, 13, 12],
+        "severity": [0, 1, 2, "unlabeled"],
+    }).to_csv(data_path, index=False)
+    with pytest.raises(ValueError, match="severity labels must be numeric"):
+        load_model(data_path)

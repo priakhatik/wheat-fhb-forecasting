@@ -32,7 +32,15 @@ def load_model(dataset_path=DATA_PATH):
     features = df[FEATURES].to_numpy(dtype=float)
     if not np.isfinite(features).all():
         raise ValueError("training data contains non-finite weather features")
-    labels = (df["severity"].to_numpy(dtype=float) >= 2).astype(int)
+    # Non-finite or out-of-domain severity labels must not silently become
+    # outbreak/non-outbreak classes (e.g. +inf previously became outbreak).
+    try:
+        severity = df["severity"].to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("training severity labels must be numeric") from exc
+    if not np.isfinite(severity).all() or not np.isin(severity, [0, 1, 2, 3]).all():
+        raise ValueError("training severity labels must be finite classes 0 through 3")
+    labels = (severity >= 2).astype(int)
     if set(labels) != {0, 1}:
         raise ValueError("training data must contain both outbreak classes")
 
@@ -56,6 +64,15 @@ def predict_fhb_risk(rainy_days, avg_humidity, high_humidity_days,
     ]], dtype=float)
     if not np.isfinite(features).all():
         raise ValueError("weather inputs must be finite numbers")
+    # The source dataset can cover a longer window than the example's
+    # 15-day description; enforce valid counts without inventing an upper
+    # bound that would reject legitimate training observations.
+    if any(isinstance(value, (bool, np.bool_)) for value in (rainy_days, high_humidity_days)) or any(
+        value < 0 or not float(value).is_integer() for value in (features[0, 0], features[0, 2])
+    ):
+        raise ValueError("rainy_days and high_humidity_days must be nonnegative whole-day counts")
+    if not 0 <= features[0, 1] <= 100:
+        raise ValueError("avg_humidity must be a percentage between 0 and 100")
     prob = float(load_model().predict_proba(features)[0, 1])
 
     if prob >= 0.70:
