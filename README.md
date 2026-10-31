@@ -140,8 +140,15 @@ print(result["recommendation"])
 print(result["key_drivers"])
 ```
 
-The prediction helper validates nonnegative whole-day weather counts and a
-0–100% humidity percentage before loading the model. Training rejects missing,
+The prediction helper validates nonnegative whole-day weather counts, the
+inclusive 15-day pre-heading window (at most 16 distinct dates), a 0–100%
+humidity percentage, and mean minimum temperature not exceeding the maximum.
+The checked-in imputed training CSV contains day counts greater than 16
+(e.g. rainy_days=40 and high_humidity_days=79). The training helper now emits
+an explicit warning for such rows instead of silently treating those inputs
+as consistent with the documented window. The source aggregation and all
+reported model metrics need to be rebuilt and re-evaluated; this change does
+**not** repair the historical dataset or validate its accuracy. Training rejects missing,
 non-finite, fractional, or out-of-range severity classes (expected 0–3) rather
 than silently converting invalid labels into outbreak classes. These checks
 protect data integrity; they do not establish field-level forecast accuracy.
