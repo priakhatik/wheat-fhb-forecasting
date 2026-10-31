@@ -5,6 +5,7 @@ developer-specific file path nor starts an interactive prompt.
 """
 from functools import lru_cache
 from pathlib import Path
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -32,7 +33,32 @@ def load_model(dataset_path=DATA_PATH):
     features = df[FEATURES].to_numpy(dtype=float)
     if not np.isfinite(features).all():
         raise ValueError("training data contains non-finite weather features")
-    labels = (df["severity"].to_numpy(dtype=float) >= 2).astype(int)
+    # The feature script selects an inclusive 15-day pre-heading interval:
+    # at most 16 distinct calendar days. The checked-in dataset contains
+    # larger counts, suggesting duplicate county-day aggregation. Do not
+    # silently present model probabilities as validated on a clean window.
+    day_counts = features[:, [0, 2]]
+    invalid_windows = np.any(
+        (day_counts < 0) | (day_counts > 16) | (day_counts != np.floor(day_counts)),
+        axis=1,
+    )
+    if invalid_windows.any():
+        warnings.warn(
+            f"{int(invalid_windows.sum())} training rows have impossible pre-heading "
+            "day counts for the documented 15-day window; rebuild features "
+            "and re-evaluate metrics before using forecasts operationally",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    # Non-finite or out-of-domain severity labels must not silently become
+    # outbreak/non-outbreak classes (e.g. +inf previously became outbreak).
+    try:
+        severity = df["severity"].to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("training severity labels must be numeric") from exc
+    if not np.isfinite(severity).all() or not np.isin(severity, [0, 1, 2, 3]).all():
+        raise ValueError("training severity labels must be finite classes 0 through 3")
+    labels = (severity >= 2).astype(int)
     if set(labels) != {0, 1}:
         raise ValueError("training data must contain both outbreak classes")
 
@@ -56,6 +82,19 @@ def predict_fhb_risk(rainy_days, avg_humidity, high_humidity_days,
     ]], dtype=float)
     if not np.isfinite(features).all():
         raise ValueError("weather inputs must be finite numbers")
+    # The source dataset can cover a longer window than the example's
+    # 15-day description; enforce valid counts without inventing an upper
+    # bound that would reject legitimate training observations.
+    if any(isinstance(value, (bool, np.bool_)) for value in (rainy_days, high_humidity_days)) or any(
+        value < 0 or not float(value).is_integer() for value in (features[0, 0], features[0, 2])
+    ):
+        raise ValueError("rainy_days and high_humidity_days must be nonnegative whole-day counts")
+    if not 0 <= features[0, 1] <= 100:
+        raise ValueError("avg_humidity must be a percentage between 0 and 100")
+    if features[0, 0] > 16 or features[0, 2] > 16:
+        raise ValueError("weather day counts exceed the inclusive 15-day pre-heading window")
+    if features[0, 4] > features[0, 3]:
+        raise ValueError("avg_tmin_c must not exceed avg_tmax_c")
     prob = float(load_model().predict_proba(features)[0, 1])
 
     if prob >= 0.70:
