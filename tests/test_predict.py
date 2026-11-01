@@ -66,3 +66,21 @@ def test_nonfinite_prediction_inputs_are_rejected():
 
     with pytest.raises(ValueError, match="finite"):
         predict_fhb_risk(4, np.nan, 3, 24, 15)
+
+@pytest.mark.parametrize("invalid_severity", [np.inf, -np.inf])
+def test_infinite_severity_is_rejected_before_classification(tmp_path, invalid_severity):
+    from scripts.predict import load_model
+
+    data_path = tmp_path / "infinite_severity.csv"
+    pd.DataFrame({
+        "rainy_days": [2, 3, 10, 12],
+        "avg_humidity": [40, 45, 75, 80],
+        "high_humidity_days": [1, 2, 9, 11],
+        "avg_tmax_c": [30, 29, 22, 21],
+        "avg_tmin_c": [18, 17, 13, 12],
+        "severity": [0, 1, 2, invalid_severity],
+    }).to_csv(data_path, index=False)
+
+    with pytest.raises(ValueError, match="non-finite severity labels"):
+        load_model(data_path)
+
