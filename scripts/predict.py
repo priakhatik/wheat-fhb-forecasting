@@ -32,7 +32,13 @@ def load_model(dataset_path=DATA_PATH):
     features = df[FEATURES].to_numpy(dtype=float)
     if not np.isfinite(features).all():
         raise ValueError("training data contains non-finite weather features")
-    labels = (df["severity"].to_numpy(dtype=float) >= 2).astype(int)
+    # NaN is checked above, but +/-Infinity survives pandas isna() and
+    # silently becomes a binary class when compared with the severity cutoff.
+    # Reject it before converting observed disease severity into labels.
+    severity = df["severity"].to_numpy(dtype=float)
+    if not np.isfinite(severity).all():
+        raise ValueError("training data contains non-finite severity labels")
+    labels = (severity >= 2).astype(int)
     if set(labels) != {0, 1}:
         raise ValueError("training data must contain both outbreak classes")
 
