@@ -21,4 +21,6 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -r requirements-predict.txt
       - name: Run portable prediction tests
-        run: python -m pytest -q tests/test_predict.py
+        run: python -m pytest -q tests/test_predict.py tests/test_label_evaluation_audit.py
+      - name: Audit recorded-label year-holdout feasibility
+        run: python scripts/audit_label_evaluation.py > label-audit.json
