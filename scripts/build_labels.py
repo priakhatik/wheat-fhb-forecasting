@@ -1,8 +1,15 @@
-import pandas as pd
-import os
+"""Generate the state/year FHB label grid at a repository-relative path.
 
-OUT_DIR = "/Users/priaa/Desktop/wheat-fhb-forecasting/raw/labels"
-os.makedirs(OUT_DIR, exist_ok=True)
+Missing labels remain explicitly missing until supported by source evidence.
+Importing this module does not write files or create local directories.
+"""
+
+from pathlib import Path
+
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT_DIR = ROOT / "raw" / "labels"
 
 # Known epidemic years from research
 KNOWN_LABELS = [
@@ -24,31 +31,40 @@ KNOWN_LABELS = [
     {"state": "SD", "year": 2023, "severity": 0, "notes": "Minimal presence", "source": "World Grain 2024"},
 ]
 
-# Build full grid - every state x every year
-states = ["ND", "MN", "SD"]
-years = range(2006, 2026)
 
-rows = []
-known_lookup = {(r["state"], r["year"]): r for r in KNOWN_LABELS}
+def build_label_grid():
+    """Return one row per state/year with explicit unknown-label provenance."""
+    states = ("ND", "MN", "SD")
+    years = range(2006, 2026)
+    known_lookup = {(row["state"], row["year"]): row for row in KNOWN_LABELS}
+    rows = []
+    for state in states:
+        for year in years:
+            key = (state, year)
+            if key in known_lookup:
+                rows.append(dict(known_lookup[key]))
+            else:
+                rows.append({
+                    "state": state,
+                    "year": year,
+                    "severity": None,
+                    "notes": "NEEDS RESEARCH",
+                    "source": "",
+                })
+    return pd.DataFrame(rows)
 
-for state in states:
-    for year in years:
-        key = (state, year)
-        if key in known_lookup:
-            rows.append(known_lookup[key])
-        else:
-            rows.append({
-                "state": state,
-                "year": year,
-                "severity": None,
-                "notes": "NEEDS RESEARCH",
-                "source": ""
-            })
 
-df = pd.DataFrame(rows)
-df.to_csv(f"{OUT_DIR}/fhb_labels.csv", index=False)
+def main():
+    df = build_label_grid()
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    destination = OUT_DIR / "fhb_labels.csv"
+    df.to_csv(destination, index=False)
+    print(f"Saved labels to: {destination}")
+    print(f"Total rows: {len(df)}")
+    print(f"Filled in: {df['severity'].notna().sum()}")
+    print(f"Needs research: {df['severity'].isna().sum()}")
+    print(df.head(10))
 
-print(f"Total rows: {len(df)}")
-print(f"Filled in: {df['severity'].notna().sum()}")
-print(f"Needs research: {df['severity'].isna().sum()}")
-print(df.head(10))
+
+if __name__ == "__main__":
+    main()
