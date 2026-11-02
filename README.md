@@ -36,9 +36,31 @@ An end-to-end pipeline that:
 | Logistic Regression | 80.00% | 0.856 |
 | **Random Forest** | **88.33%** | **0.922** |
 
-**Key finding:** Average humidity and maximum temperature during the 
-15-day pre-heading window are the strongest predictors of FHB outbreaks — 
-consistent with known Fusarium graminearum infection biology.
+**Evaluation caveat:** The reported 80.00% / 88.33% accuracy and ROC-AUC
+figures were calculated against a dataset containing **44 weather-imputed
+severity labels out of 60 state-year rows**. Because the missing labels were
+constructed from weather thresholds, these scores are **not independently
+validated outbreak prediction performance**; the features partly determine
+their own evaluation targets. Do not interpret them as held-out field accuracy.
+
+The original recorded-label dataset has 16 nonmissing severity entries
+(13 outbreaks and 3 non-outbreaks). All three recorded non-outbreak labels
+occur in 2023, so leaving 2023 out yields a training set with **no negative
+class**. A defensible leave-one-year-out binary benchmark is therefore not
+currently feasible without more independently verified labels.
+
+Run the offline, CI-tested label/holdout audit:
+
+```bash
+python scripts/audit_label_evaluation.py
+python -m pytest -q tests/test_label_evaluation_audit.py
+```
+
+The audit reports recorded vs. missing labels and whether each year-held-out
+training fold contains both classes. It does **not** train a model, verify the
+external label sources, or produce a replacement accuracy claim. More
+independently verified non-outbreak years are needed before reliable temporal
+generalization can be evaluated.
 
 ---
 
